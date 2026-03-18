@@ -1,0 +1,28 @@
+[workspace]
+authors = ["David Fullmer <david.d.fullmer@gmail.com>"]
+channels = ["conda-forge"]
+name = "glint"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+workbench = "jupyter lab"
+demo = "python -m uvicorn main:app --reload"
+
+[dependencies]
+python = ">=3.11"
+jupyterlab = ">=4.5.6,<5"
+ipywidgets = ">=8.1.8,<9"
+pandas = ">=3.0.1,<4"
+scikit-learn = ">=1.8.0,<2"
+spacy = ">=3.8.11,<4"
+sentence-transformers = ">=5.3.0,<6"
+onnx = ">=1.20.0,<2"
+onnxruntime = ">=1.24.2,<2"
+openai = ">=2.29.0,<3"
+pytest = ">=9.0.2,<10"
+pytest-benchmark = ">=5.2.3,<6"
+mlflow = ">=1.2.0,<2"
+fastapi = ">=0.135.1,<0.136"
+uvicorn = ">=0.42.0,<0.43"
+python-multipart = ">=0.0.22,<0.0.23"

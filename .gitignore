@@ -1,0 +1,12 @@
+.pixi
+node_modules
+__pycache__
+*.pyc
+.pytest_cache
+.env
+.ipynb_checkpoints/
+data/*.csv
+data/*.jsonl
+!data/.gitkeep
+models/*.onnx
+!models/.gitkeep

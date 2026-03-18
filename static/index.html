@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lume / TextLens - Semantic Guardrails</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js"></script>
+    <style>
+        .backdrop {
+            position: relative;
+        }
+        .highlights {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            color: transparent;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            padding: 0.75rem 1rem; /* match textarea padding */
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+            border: 1px solid transparent; /* match textarea border width */
+            overflow-y: auto; /* handle scrolling */
+        }
+        mark {
+            background-color: rgba(254, 226, 226, 0.5); /* red-100 with opacity */
+            border-bottom: 2px solid #ef4444; /* red-500 */
+            color: transparent;
+        }
+        textarea {
+            background-color: transparent;
+            z-index: 2;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col">
+    <header class="bg-white shadow-sm px-6 py-4">
+        <h1 class="text-2xl font-bold text-gray-800">Lume <span class="text-sm font-normal text-gray-500 ml-2">TextLens Prototype</span></h1>
+    </header>
+
+    <main class="flex-1 max-w-6xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Left: Editor -->
+        <div class="md:col-span-2 flex flex-col gap-4">
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="font-semibold text-gray-700">Input Text</label>
+                    <select id="policy-select" class="text-sm border border-gray-300 rounded px-2 py-1">
+                        <option value="no-phi">Mode: No-PHI</option>
+                        <option value="biographical">Mode: Person-Focused</option>
+                    </select>
+                </div>
+                
+                <div class="backdrop bg-gray-50 rounded border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                    <div id="highlights" class="highlights"></div>
+                    <textarea id="editor" class="w-full h-64 p-3 rounded resize-none outline-none" placeholder="Start typing... e.g. Call me at 555-0199"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Panel -->
+        <div class="flex flex-col gap-4">
+            <!-- Metrics Card -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">X-Ray Metrics</h2>
+                <div class="flex flex-col gap-3">
+                    <div>
+                        <span class="text-xs text-gray-500">Status</span>
+                        <div id="status-indicator" class="text-lg font-bold text-green-600">All Good</div>
+                    </div>
+                    <div class="flex justify-between">
+                        <div>
+                            <span class="text-xs text-gray-500">Confidence Score</span>
+                            <div id="score" class="font-mono text-sm">1.00</div>
+                        </div>
+                        <div>
+                            <span class="text-xs text-gray-500">Inference Time</span>
+                            <div id="latency" class="font-mono text-sm text-blue-600">0ms</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Violations Card -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex-1">
+                <h2 class="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">Feedback</h2>
+                <ul id="violations-list" class="flex flex-col gap-2 text-sm">
+                    <li class="text-gray-500 italic">No violations detected.</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const highlights = document.getElementById('highlights');
+        const policySelect = document.getElementById('policy-select');
+        const statusIndicator = document.getElementById('status-indicator');
+        const scoreDisplay = document.getElementById('score');
+        const latencyDisplay = document.getElementById('latency');
+        const violationsList = document.getElementById('violations-list');
+        
+        let debounceTimer;
+
+        // Sync scrolling
+        editor.addEventListener('scroll', () => {
+            highlights.scrollTop = editor.scrollTop;
+            highlights.scrollLeft = editor.scrollLeft;
+        });
+
+        async function analyzeText() {
+            const text = editor.value;
+            const policy = policySelect.value;
+            
+            // Sync text to highlight layer
+            highlights.textContent = text;
+            
+            if (!text.trim()) {
+                resetUI();
+                return;
+            }
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, policy })
+                });
+                
+                const data = await response.json();
+                updateUI(data, text);
+            } catch (error) {
+                console.error("Analysis failed:", error);
+            }
+        }
+
+        function resetUI() {
+            statusIndicator.textContent = "All Good";
+            statusIndicator.className = "text-lg font-bold text-green-600";
+            scoreDisplay.textContent = "1.00";
+            latencyDisplay.textContent = "0ms";
+            violationsList.innerHTML = '<li class="text-gray-500 italic">No violations detected.</li>';
+            highlights.innerHTML = editor.value; // clear highlights
+        }
+
+        function updateUI(data, originalText) {
+            latencyDisplay.textContent = `${data.inference_time_ms}ms`;
+            scoreDisplay.textContent = data.score.toFixed(2);
+            
+            if (data.has_violation) {
+                statusIndicator.textContent = "Violations Found";
+                statusIndicator.className = "text-lg font-bold text-red-600";
+                
+                // Update list
+                violationsList.innerHTML = '';
+                data.violations.forEach(v => {
+                    const li = document.createElement('li');
+                    li.className = "p-2 bg-red-50 border border-red-100 rounded text-red-800";
+                    li.innerHTML = `<strong>${v.type}</strong>: ${v.reason}`;
+                    violationsList.appendChild(li);
+                });
+
+                // Apply highlights
+                const markInstance = new Mark(highlights);
+                markInstance.unmark();
+                data.violations.forEach(v => {
+                    markInstance.mark(v.match, {
+                        accuracy: "exactly",
+                        separateWordSearch: false
+                    });
+                });
+            } else {
+                resetUI();
+                latencyDisplay.textContent = `${data.inference_time_ms}ms`; // keep latency
+            }
+        }
+
+        editor.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            // Debounce slightly to prevent over-fetching, but keep under 100ms budget
+            debounceTimer = setTimeout(analyzeText, 50); 
+        });
+
+        policySelect.addEventListener('change', analyzeText);
+    </script>
+</body>
+</html>
